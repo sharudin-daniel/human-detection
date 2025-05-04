@@ -1,98 +1,87 @@
 from fastapi import FastAPI, File, UploadFile
+from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 import cv2
 import torch
 import numpy as np
-from io import BytesIO
 from PIL import Image
-import base64
 import os
+import json
+import io
+import time
 
 app = FastAPI()
 
-# Загружаем модель YOLOv5
+# Загружаем YOLOv5s
 model = torch.hub.load('ultralytics/yolov5', 'yolov5s')
 
-def encode_image(image: np.array) -> str:
-    """Преобразует изображение в формат base64 для отправки через API"""
-    _, buffer = cv2.imencode('.jpg', image)
-    return base64.b64encode(buffer).decode('utf-8')
+# Папка для результатов
+os.makedirs("detected_frames", exist_ok=True)
 
-def save_image(image: np.array, frame_number: int) -> None:
-    """Сохраняет изображение на диск"""
-    output_filename = f"frame_{frame_number}_detected_people.jpg"
-    cv2.imwrite(output_filename, image)
-    print(f"Image saved as {output_filename}")
+app.mount("/images", StaticFiles(directory="detected_frames"), name="images")
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+@app.get("/", response_class=HTMLResponse)
+async def root():
+    with open("static/index.html") as f:
+        return f.read()
 
 @app.post("/detect/")
 async def detect(file: UploadFile = File(...)):
     try:
-        # Чтение видеофайла
         video_data = await file.read()
-        
-        # Создаем временный файл из байтов
-        video_path = "/tmp/temp_video.mp4"
+
+        # Сохраняем видео во временный файл
+        video_path = "temp_video.mp4"
         with open(video_path, "wb") as f:
             f.write(video_data)
-        
-        # Открываем видео с помощью OpenCV
+
         cap = cv2.VideoCapture(video_path)
-        
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         frame_count = 0
         results = []
-        
-        # Чтение видео по кадрам
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
-                break
-            
-            frame_count += 1
-            
-            # Обрабатываем только каждый 10-й кадр
-            if frame_count % 200 != 0:
-                continue  # Пропускаем кадры, которые не являются 10-м
-            
-            # Преобразуем кадр в изображение PIL
-            image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
 
-            # Прогоняем кадр через модель YOLOv5
-            detection_results = model(image)
-            
-            # Получаем результаты детекции
-            detections = detection_results.xywh[0]
-            
-            people_detected = 0
+        def generate():
+            nonlocal frame_count
+            while cap.isOpened():
+                ret, frame = cap.read()
+                if not ret:
+                    break
 
-            # Для каждого объекта в кадре проверяем, является ли он человеком
-            for *xywh, conf, cls in detections:
-                if model.names[int(cls)] == 'person' and conf > 0.5:
-                    people_detected += 1
-                    
-                    # Рисуем bounding box для каждого человека
-                    x1, y1, x2, y2 = [int(coord) for coord in xywh]  # Преобразуем координаты в целые числа
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
-            
-            # Если люди найдены, сохраняем кадр
-            if people_detected > 0:
-                encoded_image = encode_image(frame)
-                
-                # Сохраняем изображение на диск
-                save_image(frame, frame_count)
+                frame_count += 1
+                if frame_count % 10 != 0:
+                    continue
 
-                results.append({
-                    "frame": frame_count,
-                    "people_detected": people_detected
-                    # "image": encoded_image  # Добавляем картинку в формате base64
-                })
-            else:
-                results.append({
-                    "frame": frame_count,
-                    "people_detected": people_detected
-                })
-        
-        cap.release()
-        
-        return {"results": results}
+                # Детекция
+                image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+                detection_results = model(image)
+                detections = detection_results.xyxy[0]
+
+                people_detected = 0
+                for *xyxy, conf, cls in detections:
+                    if model.names[int(cls)] == 'person' and conf > 0.5:
+                        people_detected += 1
+                        x1, y1, x2, y2 = map(int, xyxy)
+                        cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
+
+                entry = {"frame": frame_count, "people_detected": people_detected}
+                if people_detected > 0:
+                    filename = f"frame_{frame_count}.jpg"
+                    filepath = f"detected_frames/{filename}"
+                    cv2.imwrite(filepath, frame)
+                    entry["image_path"] = f"/images/{filename}"
+
+                results.append(entry)
+
+                # Прогресс-обновление (в формате NDJSON — newline-delimited JSON)
+                progress = int((frame_count / total_frames) * 100)
+                yield f"data:{json.dumps({'progress': progress, 'latest': entry})}\n\n"
+                time.sleep(0.05)  # для эффекта
+
+            cap.release()
+            yield f"data:{json.dumps({'done': True, 'results': results})}\n\n"
+
+        return StreamingResponse(generate(), media_type="text/event-stream")
 
     except Exception as e:
         return {"error": str(e)}
