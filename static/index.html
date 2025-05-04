@@ -2,121 +2,23 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>YOLOv5 People Detection</title>
+  <title>YOLOv5 People Detection - Start</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 40px; }
-    img { max-width: 400px; display: block; margin-top: 10px; }
-    .frame-block { margin-bottom: 20px; padding: 10px; border: 1px solid #ccc; border-radius: 6px; }
-    .highlight { background-color: #fff8c6; }
-    button { margin-left: 10px; padding: 5px 10px; cursor: pointer; }
-    .hidden { display: none; }
-    #progressContainer { width: 100%; background: #eee; height: 25px; border-radius: 4px; margin: 20px 0; }
-    #progressBar { height: 100%; width: 0%; background: #4caf50; transition: width 0.3s; }
-    #progressText { margin-top: 10px; font-size: 16px; font-weight: bold; }
+    body { font-family: Arial, sans-serif; margin: 40px; text-align: center; }
+    h1 { font-size: 2em; margin-bottom: 20px; }
+    button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
+    header { margin-bottom: 30px; }
+    img { width: 150px; height: auto; }
   </style>
 </head>
 <body>
-  <h1>Upload a Video</h1>
-  <input type="file" id="videoInput">
-  <button onclick="uploadVideo()">Upload</button>
+  <header>
+    <img src="/static/logo.png" alt="Logo">
+  </header>
 
-  <div id="progressContainer">
-    <div id="progressBar"></div>
-  </div>
-  <div id="progressText">0%</div>
-
-  <h2>Detection Results</h2>
-  <div id="results"></div>
-
-  <script>
-    function toggleImage(id, btn) {
-      const img = document.getElementById(id);
-      img.classList.toggle('hidden');
-      btn.textContent = img.classList.contains('hidden') ? 'Показать изображение' : 'Скрыть изображение';
-    }
-
-    async function uploadVideo() {
-      const fileInput = document.getElementById('videoInput');
-      const file = fileInput.files[0];
-      if (!file) {
-        alert("Please select a video file.");
-        return;
-      }
-
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await fetch('/detect/', {
-        method: 'POST',
-        body: formData
-      });
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder("utf-8");
-      const resultsDiv = document.getElementById('results');
-      resultsDiv.innerHTML = '';
-      const progressBar = document.getElementById('progressBar');
-      const progressText = document.getElementById('progressText');
-
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const chunks = buffer.split("\n\n");
-        buffer = chunks.pop();
-
-        for (const chunk of chunks) {
-          if (chunk.startsWith("data:")) {
-            const data = JSON.parse(chunk.slice(5));
-
-            if (data.progress !== undefined) {
-              // Обновляем прогресс-бар и проценты
-              const progress = data.progress;
-              progressBar.style.width = `${progress}%`;
-              progressText.textContent = `${progress}%`;
-
-              if (data.latest) {
-                const result = data.latest;
-                const frameBlock = document.createElement('div');
-                frameBlock.className = 'frame-block';
-                if (result.people_detected > 0) {
-                  frameBlock.classList.add('highlight');
-                }
-
-                const statText = document.createElement('span');
-                statText.textContent = `Frame: ${result.frame}, People detected: ${result.people_detected}`;
-                frameBlock.appendChild(statText);
-
-                if (result.image_path) {
-                  const btn = document.createElement('button');
-                  btn.textContent = 'Показать изображение';
-                  const imgId = `image-${result.frame}`;
-                  btn.onclick = () => toggleImage(imgId, btn);
-
-                  const img = document.createElement('img');
-                  img.id = imgId;
-                  img.src = result.image_path;
-                  img.classList.add('hidden');
-
-                  frameBlock.appendChild(btn);
-                  frameBlock.appendChild(img);
-                }
-
-                resultsDiv.appendChild(frameBlock);
-              }
-            }
-
-            if (data.done) {
-              progressBar.style.width = `100%`;
-              progressText.textContent = `100% - Processing Complete!`;
-            }
-          }
-        }
-      }
-    }
-  </script>
+  <h1>Welcome to YOLOv5 People Detection</h1>
+  <p>This application detects people in video frames using YOLOv5.</p>
+  <p>Click below to start uploading a video for detection:</p>
+  <button onclick="window.location.href='/start';">Go to Video Upload Page</button>
 </body>
 </html>

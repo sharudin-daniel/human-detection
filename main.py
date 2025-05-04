@@ -18,12 +18,20 @@ model = torch.hub.load('ultralytics/yolov5', 'yolov5s')
 # Папка для результатов
 os.makedirs("detected_frames", exist_ok=True)
 
+# Монтируем статические файлы
 app.mount("/images", StaticFiles(directory="detected_frames"), name="images")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+# Стартовая страница
 @app.get("/", response_class=HTMLResponse)
-async def root():
+async def start():
     with open("static/index.html") as f:
+        return f.read()
+
+# Страница для загрузки видео
+@app.get("/start", response_class=HTMLResponse)
+async def root():
+    with open("static/start.html") as f:
         return f.read()
 
 @app.post("/detect/")
