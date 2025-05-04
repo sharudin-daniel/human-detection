@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+python-multipart
+torch
+opencv-python
+pandas
+requests
+Pillow
+yolov5
