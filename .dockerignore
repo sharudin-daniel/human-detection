@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.pyo
+*.log
+*.md
+.env
+.git/
+venv/
+tests/
+data/
+*.jpg
+*.png
+*.csv
+*.npy
