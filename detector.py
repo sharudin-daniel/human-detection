@@ -1,10 +1,8 @@
-import torch
+from ultralytics import YOLO
 import cv2
-import os
-import tempfile
 
-# Загрузка модели YOLOv5s
-model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)
+# Загрузка самой лёгкой модели YOLOv8n
+model = YOLO('yolov8n.pt')
 
 def detect_people_in_video(video_path):
     cap = cv2.VideoCapture(video_path)
@@ -16,14 +14,17 @@ def detect_people_in_video(video_path):
         if not ret:
             break
 
-        # Каждые 10 кадров (для ускорения)
         if frame_index % 10 == 0:
             results = model(frame)
-            detections = results.pandas().xyxy[0]
-            people = detections[detections['name'] == 'person']
+            people_count = 0
+            for result in results:
+                boxes = result.boxes
+                for box in boxes:
+                    if result.names[int(box.cls)] == 'person':
+                        people_count += 1
             frame_results.append({
                 "frame": frame_index,
-                "people_detected": len(people)
+                "people_detected": people_count
             })
 
         frame_index += 1
