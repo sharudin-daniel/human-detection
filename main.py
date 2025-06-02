@@ -9,6 +9,8 @@ import os
 from PIL import Image
 from torchvision import transforms
 
+from trainer import RescueNet, device
+
 app = FastAPI()
 
 class DepthwiseSeparableConv(torch.nn.Module):
@@ -49,9 +51,9 @@ class CustomDetector(torch.nn.Module):
         x = self.head_h2(x)
         return x
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = torch.hub.load("ultralytics/yolov5", "yolov5s", pretrained=True)
-model.to(device).eval()
+model = RescueNet().to(device)
+model.load_state_dict(torch.load("rescuenet_voc.pth", map_location=device))
+model.eval()
 
 preprocess = transforms.Compose([
     transforms.Resize((256, 256)),
